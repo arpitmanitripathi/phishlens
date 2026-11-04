@@ -1,4 +1,4 @@
-# Anti-Phisher — Final Build Plan
+# PhishLens — Final Build Plan
 
 ## Goal
 A real-time phishing URL detector built as a complete ML project:
@@ -70,10 +70,10 @@ Key rule: feature and char-encoding code is shared by training and serving.
 
 ## Folder structure
 ```
-anti-phisher/
+phishlens/
 ├── data/raw/                  # downloaded lists (not in git)
 ├── data/processed/            # dataset.csv
-├── src/antiphisher/
+├── src/phishlens/
 │   ├── features.py            # URL → 29 numbers
 │   ├── char_encoding.py       # URL → sequence of character ids
 │   ├── charcnn.py             # CNN model definition

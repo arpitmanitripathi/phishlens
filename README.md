@@ -1,4 +1,6 @@
-# Anti-Phisher
+# PhishLens
+
+**Real-time phishing URL detection with an explainable LightGBM + CNN ensemble.**
 
 Real-time phishing URL detector. A soft-voting ensemble of **LightGBM** (29 engineered URL
 features) and a **character-level CNN** (raw URL text) scores a URL, and the app returns a

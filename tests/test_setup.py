@@ -17,7 +17,7 @@ LIBRARIES = [
     "requests",
     "bs4",
     "matplotlib",
-    "antiphisher",  # our own package
+    "phishlens",  # our own package
 ]
 
 
