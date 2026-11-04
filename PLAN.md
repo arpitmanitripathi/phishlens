@@ -99,6 +99,10 @@ phishlens/
 └── PLAN.md
 ```
 
+## Project report
+`docs/REPORT.md` — living report, updated at the end of every phase.
+Scheme (http/https) may be shown to users as a separate rule-based note, outside the model score.
+
 ## Phases (~11 days at 3–4 h/day)
 - [x] **0. Setup** (0.5d) — folders, virtualenv, requirements, `.gitignore`, git init
 - [x] **1. Data** (2d) — download feeds, crawl legit links, clean, dedupe, balance, `dataset.csv`, EDA
