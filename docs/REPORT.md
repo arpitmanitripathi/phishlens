@@ -1,7 +1,7 @@
 # PhishLens — Project Report
 
 *Living document, updated at the end of every phase.*
-*Last updated: 2026-11-05 (Phases 0–1 complete; second bias audit).*
+*Last updated: 2026-11-05 (Phases 0–1 complete, data audit closed).*
 
 ---
 
@@ -160,6 +160,7 @@ than by phishing itself. A model would learn it as a shortcut that fails in the 
 | D7 | Count hyphens in the domain only | EDA: legit paths use more hyphens than phishing |
 | D8 | Shared `urls.py` used by dataset, features and app | No train/serve mismatch (the bug in the original project) |
 | D10 | Normalise trailing `/`, `#fragment`, non-ASCII for every URL | Second bias audit found each to be a collection artefact (§4.1) |
+| D11 | Free-hosting imbalance accepted and documented, not fixed | New data source needed; limited benefit at this scope |
 | D9 | LightGBM + Char-CNN, soft voting; LR/DT/RF only as benchmark | Two genuinely different views of a URL; benchmark justifies the choice |
 
 ---
@@ -179,21 +180,53 @@ note (*"connection is not encrypted"*) without affecting the model score.
 Attackers genuinely favour free hosting and site builders (000webhostapp, weebly, github.io,
 vercel.app…), but millions of legitimate sites also live there. Tranco ranks main domains only,
 so almost no legit user sites on these platforms entered the dataset (0.1 % vs 22.4 %). A model
-trained like this would treat *every* site on these platforms as phishing. Status: open decision.
+trained like this would treat *every* site on these platforms as phishing.
+**Decision (D11):** accepted and documented rather than fixed. Fixing it needs a new data source
+(e.g. the Common Crawl index) for limited benefit at this project's scope. Listed as future work.
+
+### 6.3 Why some URL parts are hidden or normalised (the principle)
+A model learns **every** difference between the two classes, without knowing why it exists.
+Differences are of two kinds:
+- **real** — caused by phishing itself (suspicious words, brand misuse, random tokens): the model
+  should learn them;
+- **artefacts** — caused by how the data was collected (scheme, `www.`, trailing `/`, default
+  ports, encoding): true *in this dataset* but false in the real world.
+
+If artefacts stay, the test score looks excellent (the test set shares the same quirks) while the
+model fails on real URLs. The rule applied: **the model may only see information that means the
+same thing in the real world as in the dataset.** Being "true in our dataset" is not enough.
+
+### 6.4 What a perfectly unbiased dataset would look like
+Both classes collected the same way from the same population — e.g. all links real users clicked
+over a period, labelled afterwards. This is how large providers (e.g. browser safe-browsing
+services) build their data; it is not publicly available. The achievable standard for a public
+project is therefore: **approximate with the best public sources, audit every class difference,
+neutralise artefacts, and document what remains.**
+
+### 6.5 Is 40,000 URLs enough?
+Comparable to well-known public datasets (ISCX-URL2016 ≈ 36k, UCI 11k; larger ones such as
+PhiUSIIL ≈ 235k exist). LightGBM on 29 features learns well at this size. Phishing is not the
+limit (789k available); legit is (~36k crawled). A **learning curve** in Phase 3 (training on
+25/50/75/100 % of the data) will show with evidence whether more data would help.
 
 ---
 
-## 7. Limitations (so far)
-- URL-only detection cannot catch phishing hosted on compromised legitimate sites or free hosts
-  whose URLs look clean.
-- Legit links come from homepages only (often navigation pages), slightly cleaner than deep pages.
-- Phishing feeds contain some noise (dead or mislabelled URLs).
-- Scores measured on URL datasets tend to overstate real-world performance.
+## 7. Known remaining issues and limitations
+
+| Issue | Severity | Handling |
+|---|---|---|
+| Few legit sites on free hosting platforms (0.1 % vs 22.4 %) | Medium | Documented (§6.2); such sites may be over-flagged |
+| Legit URLs have fewer `?query` strings (7.2 % vs 18.5 %) | Mild | Documented; feature importance checked in Phase 3 |
+| Legit links come from homepages only (often navigation pages) | Mild | Documented; slightly cleaner than deep pages users receive |
+| Feed noise (dead or mislabelled phishing URLs) | Small | Documented |
+| Phishing on compromised legitimate sites looks like a normal URL | Inherent | Limit of URL-only detection |
+| Same website in train and test would inflate scores | High if ignored | Fixed in Phase 3: split by website (`domain`) |
+| Scores on URL datasets overstate real-world performance | Inherent | Hand-picked tricky URLs tested in Phase 3 |
 
 ---
 
 ## 8. Upcoming phases
-2. Feature extraction (29 features) and character encoding
+2. Feature extraction (29 features) and character encoding — **next**
 3. Benchmark, LightGBM, Char-CNN, voting, evaluation
 4. Explanations
 5. FastAPI application and web page
