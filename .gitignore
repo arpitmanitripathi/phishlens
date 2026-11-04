@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data: raw downloads are large and re-creatable with scripts/build_dataset.py
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Training-only artifacts (PyTorch checkpoints). Final ONNX/joblib models are committed.
+models/*.pt
+
+# Secrets / local config
+.env
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/
