@@ -4,7 +4,7 @@ Used by BOTH the dataset builder and (later) the feature extractor / live app, s
 of the project cleans and splits URLs in exactly the same way.
 """
 
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import quote, urlsplit, urlunsplit
 
 import tldextract
 
@@ -19,6 +19,9 @@ DEFAULT_PORTS = {"http": ":80", "https": ":443"}
 # Schemes written without "//" that would otherwise be mistaken for a host ("mailto:x@y.com").
 NON_WEB_SCHEMES = ("mailto:", "javascript:", "data:", "tel:", "file:", "about:")
 MAX_URL_LENGTH = 2000
+# Characters left as-is when %-encoding; everything else (e.g. "é") becomes %XX.
+# "%" is included so already-encoded URLs are not double-encoded.
+_SAFE_URL_CHARS = "/:@!$&'()*+,;=?%-._~"
 
 
 def normalize_url(url: str) -> str | None:
@@ -28,6 +31,8 @@ def normalize_url(url: str) -> str | None:
     - adds "http://" when the scheme is missing
     - keeps only http / https
     - lowercases scheme and host (paths are case-sensitive, so they are kept as-is)
+    - removes default ports, trailing "/" and "#fragment"; encodes non-ASCII characters
+      (each of these was a collection artefact found during EDA, see docs/REPORT.md)
     """
     if not isinstance(url, str):
         return None
@@ -55,7 +60,25 @@ def normalize_url(url: str) -> str | None:
     if netloc.endswith(default_port):
         netloc = netloc[: -len(default_port)]
 
-    return urlunsplit((scheme, netloc, parts.path, parts.query, parts.fragment))
+    # Non-ASCII host -> punycode ("bücher.de" -> "xn--bcher-kva.de"), as browsers send it.
+    if not hostname.isascii():
+        try:
+            netloc = netloc.replace(hostname, hostname.encode("idna").decode("ascii"))
+        except UnicodeError:
+            return None
+
+    # Non-ASCII path/query -> %-encoding ("/café" -> "/caf%C3%A9"), as browsers send it.
+    # The phishing feeds store URLs this way; our crawler saw raw characters.
+    path = quote(parts.path, safe=_SAFE_URL_CHARS)
+    query = quote(parts.query, safe=_SAFE_URL_CHARS)
+
+    # Trailing "/" removed ("site.com/about/" -> "site.com/about"): it does not change the page,
+    # but the phishing feeds strip it and websites keep it -> a fake "legit" signal.
+    path = path.rstrip("/")
+
+    # The "#fragment" is never sent to the server, so it is not part of the page address.
+    # Our crawler removed it, the feeds did not -> dropped everywhere for consistency.
+    return urlunsplit((scheme, netloc, path, query, ""))
 
 
 def model_input(url: str) -> str:

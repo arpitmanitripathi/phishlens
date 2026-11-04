@@ -44,7 +44,7 @@ Simple enough to explain every part in an interview.
 | 11 | has_ip | 26 | path_entropy |
 | 12 | https_in_domain | 27 | percent_encoded_ratio |
 | 13 | has_port | 28 | vowel_ratio_in_domain |
-| 14 | has_double_slash_in_path | 29 | has_fragment (#) |
+| 14 | has_double_slash_in_path | 29 | is_homepage (no path, no query) |
 | 15 | path_has_file_extension (.php .html .exe) | | |
 
 Features 7 and 26–29 are ideas taken from studying PhishX (own implementation).

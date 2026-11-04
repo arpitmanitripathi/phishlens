@@ -13,6 +13,13 @@ from phishlens.urls import hostname, model_input, normalize_url, registered_doma
         ("http://site.com:80/a", "http://site.com/a"),
         ("https://site.com:8443/a", "https://site.com:8443/a"),  # real port kept
         ("http://site.com:443/a", "http://site.com:443/a"),  # 443 is not default for http
+        ("https://site.com/about/", "https://site.com/about"),  # trailing slash removed
+        ("https://site.com/", "https://site.com"),
+        ("https://site.com/a#top", "https://site.com/a"),  # fragment removed
+        ("https://site.com/café?q=ü", "https://site.com/caf%C3%A9?q=%C3%BC"),  # %-encoded
+        ("https://site.com/caf%C3%A9", "https://site.com/caf%C3%A9"),  # not double-encoded
+        ("https://bücher.de/x", "https://xn--bcher-kva.de/x"),  # punycode host
+        ("https://a.com/p?x=1&y=a/b", "https://a.com/p?x=1&y=a/b"),  # normal query unchanged
     ],
 )
 def test_normalize_url_cleans(raw, expected):

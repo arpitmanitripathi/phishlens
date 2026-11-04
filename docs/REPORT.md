@@ -1,7 +1,7 @@
 # PhishLens — Project Report
 
 *Living document, updated at the end of every phase.*
-*Last updated: 2026-11-05 (Phases 0–1 complete).*
+*Last updated: 2026-11-05 (Phases 0–1 complete; second bias audit).*
 
 ---
 
@@ -122,6 +122,13 @@ than by phishing itself. A model would learn it as a shortcut that fails in the 
 | Uses `http://` (not https) | 0.9 % | 23.8 % | ⚠️ Artefact: crawler started every site at https → hidden from models |
 | Starts with `www.` | 51.0 % | 8.7 % | ⚠️ Artefact of site conventions → hidden from models |
 | Default port `:443` | 2.4 % → **0 %** | 0.2 % | ⚠️ Artefact from redirects → fixed in normalisation |
+| Ends with `/` | 39.4 % → **0.06 %** | 0.9 % → 0 % | 🚨 Artefact: feeds strip it, sites keep it → removed in normalisation |
+| Non-ASCII characters | 0.6 % → **0 %** | 0 % | ⚠️ Artefact: feeds store encoded URLs → %-encoding / punycode in normalisation |
+| `#fragment` | 0 % | 0.04 % → 0 % | ⚠️ Artefact: crawler dropped it → dropped everywhere; feature `has_fragment` replaced by `is_homepage` |
+| Free hosting / site builders | 0.1 % | 22.4 % | 🚨 Partly artefact: Tranco lists only main domains, never user sites (`someone.weebly.com`) → see §6.2 |
+| Has `?query` | 7.2 % | 18.5 % | 🟡 Partly artefact (homepage navigation links rarely have queries) → documented, monitored |
+| `.php` / `.html` path | 10.0 % | 33.0 % | ✅ Real (phishing kits are mostly PHP) |
+| Bare homepage | 12.4 % | 27.6 % | ✅ Real (many phishing sites live at the root) |
 
 ### 4.2 Findings
 
@@ -152,6 +159,7 @@ than by phishing itself. A model would learn it as a shortcut that fails in the 
 | D6 | `domain` column; split train/test by website (Phase 3) | Prevent the model "recognising" a site instead of judging the URL |
 | D7 | Count hyphens in the domain only | EDA: legit paths use more hyphens than phishing |
 | D8 | Shared `urls.py` used by dataset, features and app | No train/serve mismatch (the bug in the original project) |
+| D10 | Normalise trailing `/`, `#fragment`, non-ASCII for every URL | Second bias audit found each to be a collection artefact (§4.1) |
 | D9 | LightGBM + Char-CNN, soft voting; LR/DT/RF only as benchmark | Two genuinely different views of a URL; benchmark justifies the choice |
 
 ---
@@ -166,6 +174,12 @@ are http versus 23.8 % of phishing. A model shown the scheme would learn
 legitimate http sites and under-weighting real clues for https phishing (76 % of our phishing
 URLs already use https). The scheme can still be shown to the user as a separate, rule-based
 note (*"connection is not encrypted"*) without affecting the model score.
+
+### 6.2 Free hosting imbalance
+Attackers genuinely favour free hosting and site builders (000webhostapp, weebly, github.io,
+vercel.app…), but millions of legitimate sites also live there. Tranco ranks main domains only,
+so almost no legit user sites on these platforms entered the dataset (0.1 % vs 22.4 %). A model
+trained like this would treat *every* site on these platforms as phishing. Status: open decision.
 
 ---
 
