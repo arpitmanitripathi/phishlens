@@ -15,6 +15,7 @@ import tldextract
 _EXTRACT = tldextract.TLDExtract(suffix_list_urls=(), include_psl_private_domains=True)
 
 ALLOWED_SCHEMES = {"http", "https"}
+DEFAULT_PORTS = {"http": ":80", "https": ":443"}
 # Schemes written without "//" that would otherwise be mistaken for a host ("mailto:x@y.com").
 NON_WEB_SCHEMES = ("mailto:", "javascript:", "data:", "tel:", "file:", "about:")
 MAX_URL_LENGTH = 2000
@@ -47,9 +48,14 @@ def normalize_url(url: str) -> str | None:
     if parts.scheme.lower() not in ALLOWED_SCHEMES or not hostname or "." not in hostname:
         return None
 
-    return urlunsplit(
-        (parts.scheme.lower(), parts.netloc.lower(), parts.path, parts.query, parts.fragment)
-    )
+    scheme, netloc = parts.scheme.lower(), parts.netloc.lower()
+    # ":443" on https and ":80" on http are the defaults, so "site.com:443" IS "site.com".
+    # Some sites add them in redirects; left in, they would become a fake "legit" signal.
+    default_port = DEFAULT_PORTS[scheme]
+    if netloc.endswith(default_port):
+        netloc = netloc[: -len(default_port)]
+
+    return urlunsplit((scheme, netloc, parts.path, parts.query, parts.fragment))
 
 
 def model_input(url: str) -> str:

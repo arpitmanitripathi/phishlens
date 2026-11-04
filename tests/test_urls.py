@@ -9,6 +9,10 @@ from phishlens.urls import hostname, model_input, normalize_url, registered_doma
         ("https://Example.COM/Path?A=1", "https://example.com/Path?A=1"),  # path case kept
         ("  example.com/login  ", "http://example.com/login"),  # scheme added, spaces stripped
         ("HTTP://Site.org", "http://site.org"),
+        ("https://site.com:443/a", "https://site.com/a"),  # default port removed
+        ("http://site.com:80/a", "http://site.com/a"),
+        ("https://site.com:8443/a", "https://site.com:8443/a"),  # real port kept
+        ("http://site.com:443/a", "http://site.com:443/a"),  # 443 is not default for http
     ],
 )
 def test_normalize_url_cleans(raw, expected):

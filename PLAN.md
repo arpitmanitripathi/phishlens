@@ -35,7 +35,7 @@ Simple enough to explain every part in an interview.
 | 2 | domain_length | 17 | suspicious_tld |
 | 3 | path_length | 18 | is_shortener |
 | 4 | num_dots | 19 | has_punycode (xn--) |
-| 5 | num_hyphens | 20 | num_suspicious_words |
+| 5 | num_hyphens_in_domain | 20 | num_suspicious_words |
 | 6 | num_digits | 21 | brand_in_url_not_domain |
 | 7 | num_path_segments | 22 | brand_lookalike |
 | 8 | num_query_params | 23 | domain_entropy |
@@ -48,6 +48,12 @@ Simple enough to explain every part in an interview.
 | 15 | path_has_file_extension (.php .html .exe) | | |
 
 Features 7 and 26–29 are ideas taken from studying PhishX (own implementation).
+
+EDA notes for Phase 2 (notebooks/eda.ipynb):
+- Hyphens: legit URLs have MORE hyphens overall (path slugs) → count hyphens in the domain only.
+- Punycode and %-encoding are equally common in both classes → expect little value; keep, let the model decide.
+- Brand matching must avoid substrings inside other words (e.g. "chase" in "purchase").
+- Default ports (:443/:80) were a collection artefact → removed in normalize_url().
 
 ## Architecture
 ```
@@ -95,7 +101,7 @@ phishlens/
 
 ## Phases (~11 days at 3–4 h/day)
 - [x] **0. Setup** (0.5d) — folders, virtualenv, requirements, `.gitignore`, git init
-- [ ] **1. Data** (2d) — download feeds, crawl legit links, clean, dedupe, balance, `dataset.csv`, EDA
+- [x] **1. Data** (2d) — download feeds, crawl legit links, clean, dedupe, balance, `dataset.csv`, EDA
 - [ ] **2. Features** (1.5d) — `features.py` (29) + `char_encoding.py` + tests
 - [ ] **3. Models** (3d) — benchmark 4 models, train LightGBM + Char-CNN, tune voting weight, test-set evaluation, ONNX export
 - [ ] **4. Reasons** (1d) — top 3 human-readable reasons per verdict
