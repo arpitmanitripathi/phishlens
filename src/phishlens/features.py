@@ -3,7 +3,7 @@
 The SAME function is used for training (Phase 3) and for the live app (Phase 5), so the model
 always sees features computed in exactly the same way.
 
-Rule (see docs/REPORT.md, section 7.3): features only look at the part of the URL that means
+Rule (see docs/REPORT.md, section 8.3): features only look at the part of the URL that means
 the same thing in the real world as in our dataset -> model_input() hides "http(s)://" and "www.".
 """
 
