@@ -125,7 +125,7 @@ than by phishing itself. A model would learn it as a shortcut that fails in the 
 | Ends with `/` | 39.4 % → **0.06 %** | 0.9 % → 0 % | 🚨 Artefact: feeds strip it, sites keep it → removed in normalisation |
 | Non-ASCII characters | 0.6 % → **0 %** | 0 % | ⚠️ Artefact: feeds store encoded URLs → %-encoding / punycode in normalisation |
 | `#fragment` | 0 % | 0.04 % → 0 % | ⚠️ Artefact: crawler dropped it → dropped everywhere; feature `has_fragment` replaced by `is_homepage` |
-| Free hosting / site builders | 0.1 % | 22.4 % | 🚨 Partly artefact: Tranco lists only main domains, never user sites (`someone.weebly.com`) → see §6.2 |
+| Free hosting / site builders | 0.1 % | 22.4 % | 🚨 Partly artefact: Tranco lists only main domains, never user sites (`someone.weebly.com`) → see §7.2 |
 | Has `?query` | 7.2 % | 18.5 % | 🟡 Partly artefact (homepage navigation links rarely have queries) → documented, monitored |
 | `.php` / `.html` path | 10.0 % | 33.0 % | ✅ Real (phishing kits are mostly PHP) |
 | Bare homepage | 12.4 % | 27.6 % | ✅ Real (many phishing sites live at the root) |
@@ -147,13 +147,83 @@ than by phishing itself. A model would learn it as a shortcut that fails in the 
 
 ---
 
-## 5. Design decisions log
+## 5. Feature engineering (Phase 2)
+
+Code: `src/phishlens/features.py` (LightGBM), `src/phishlens/char_encoding.py` (Char-CNN),
+tests in `tests/test_features.py`. Both modules call `normalize_url()` and `model_input()` from
+`urls.py`, so training and the live app compute inputs with identical code (D8), and the scheme
+and `www.` are invisible to both models (D3).
+
+### 5.1 The 29 features
+| Group | Features |
+|---|---|
+| Size and counts | url_length, domain_length, path_length, num_dots, num_hyphens_in_domain, num_digits, num_path_segments, num_query_params, num_special_chars |
+| Tricks in the address | has_at, has_ip, https_in_domain, has_port, has_double_slash_in_path, path_has_file_extension, num_subdomains |
+| Domain reputation (fixed lists) | suspicious_tld, is_shortener, has_punycode |
+| Words and brands | num_suspicious_words, brand_in_url_not_domain, brand_lookalike |
+| Randomness / unusual text | domain_entropy, digit_ratio_in_domain, longest_token_length, path_entropy, percent_encoded_ratio, vowel_ratio_in_domain, is_homepage |
+
+Design choices:
+- **Word lists come from public knowledge, not from our data** (abused-TLD reports, commonly
+  impersonated brands, URL shorteners). A list built by reading our own phishing URLs would
+  memorise the dataset and inflate test scores. For the same reason `.dev`, `.app` and `.io` are
+  *not* in the suspicious-TLD list: in our data they lean phishing only because of free hosting
+  (§7.2).
+- **Brands are matched as whole tokens**: "chase" inside "purchase" or "apple" inside
+  "pineapple" does not count. A brand on its own site (`paypal.co.uk`) or own TLD
+  (`research.google`) does not count either.
+- **Look-alikes** (`paypa1`, `rnicrosoft`, `faceb00k`, `netfllx`): character swaps (0→o, 1→l,
+  rn→m, vv→w…) or one typo away from a brand. The typo rule is limited to brands of 6+ letters
+  with the same first letter, after tests showed false matches such as `apply`→apple,
+  `cloud`→icloud and `finance`→binance.
+- **Hyphens are counted in the domain only** (D7).
+
+### 5.2 Character encoding for the Char-CNN
+The URL (after `model_input()`, lowercased) becomes 200 integer ids: 68 known characters
+(a–z, 0–9, 32 punctuation marks) get ids 2–69, 0 = padding, 1 = unknown. Longer URLs are cut.
+On the dataset: 0 unknown characters (normalisation makes every URL ASCII) and 2.7 % of URLs are
+longer than 200 characters.
+
+### 5.3 Sanity check on the 40,000 URLs
+All 40,000 URLs are processed in about 1 s (≈ 26 µs per URL), with no missing values.
+Average value per class (selection):
+
+| Feature | Legit | Phishing |
+|---|---|---|
+| url_length | 41.0 | 65.5 |
+| domain_length | 13.0 | 24.1 |
+| num_digits | 2.3 | 10.8 |
+| num_hyphens_in_domain | 0.07 | 0.65 |
+| num_subdomains | 0.10 | 0.47 |
+| longest_token_length | 10.1 | 22.8 |
+| path_has_file_extension | 10.2 % | 33.5 % |
+| suspicious_tld | 0.8 % | 12.0 % |
+| brand_in_url_not_domain | 0.9 % | 10.6 % |
+| num_suspicious_words | 0.02 | 0.27 |
+| brand_lookalike | 0 % | 0.6 % |
+| has_ip / has_at | 0 % / 0 % | 1.1 % / 2.0 % |
+| path_length | 25.3 | 23.9 |
+| percent_encoded_ratio | 0.012 | 0.002 |
+
+Observations:
+- The directions match the EDA (Section 4.2) → the features measure what they are meant to.
+- **path_length is almost equal** in both classes: the crawl removed the length shortcut (D2).
+- **percent_encoded_ratio is higher for legit** URLs (non-English article slugs such as
+  `/caf%C3%A9`). Plausibly real, but watched in Phase 3 feature importance.
+- `is_shortener`, `has_punycode`, `https_in_domain`, `has_port` are almost never 1 in either
+  class: little help in training, kept because they matter for live URLs.
+- Remaining false positive seen: a legit page *about* a brand (`eneba.com/store/amazon-gift-cards`)
+  triggers brand_in_url_not_domain. Expected; the model weighs it together with other features.
+
+---
+
+## 6. Design decisions log
 
 | # | Decision | Reason |
 |---|---|---|
 | D1 | URL-text-only features | Fast (ms), safe (no visiting malicious pages), simple |
 | D2 | Crawl legit URLs with paths | Avoid the length/path shortcut seen in PhishX |
-| D3 | Hide scheme (`http/https`) and `www.` from models | Both are collection artefacts in this dataset (§4.1, §6.1) |
+| D3 | Hide scheme (`http/https`) and `www.` from models | Both are collection artefacts in this dataset (§4.1, §7.1) |
 | D4 | Strip default ports in normalisation | `:443` appeared only in legit URLs because of redirects |
 | D5 | Caps per host/website when sampling phishing | Variety; prevent single campaigns dominating |
 | D6 | `domain` column; split train/test by website (Phase 3) | Prevent the model "recognising" a site instead of judging the URL |
@@ -161,13 +231,14 @@ than by phishing itself. A model would learn it as a shortcut that fails in the 
 | D8 | Shared `urls.py` used by dataset, features and app | No train/serve mismatch (the bug in the original project) |
 | D10 | Normalise trailing `/`, `#fragment`, non-ASCII for every URL | Second bias audit found each to be a collection artefact (§4.1) |
 | D11 | Free-hosting imbalance accepted and documented, not fixed | New data source needed; limited benefit at this scope |
+| D12 | Feature word lists from public sources, not from our data | Lists built from our phishing URLs would memorise the dataset |
 | D9 | LightGBM + Char-CNN, soft voting; LR/DT/RF only as benchmark | Two genuinely different views of a URL; benchmark justifies the choice |
 
 ---
 
-## 6. Discussion notes
+## 7. Discussion notes
 
-### 6.1 Why the models do not see `http://` / `https://` / `www.`
+### 7.1 Why the models do not see `http://` / `https://` / `www.`
 In the real world, plain `http://` is a *weak* warning sign, but in **our dataset** it is mostly
 an artefact: every legit URL was collected starting from `https://`, so only 0.9 % of legit URLs
 are http versus 23.8 % of phishing. A model shown the scheme would learn
@@ -176,7 +247,7 @@ legitimate http sites and under-weighting real clues for https phishing (76 % of
 URLs already use https). The scheme can still be shown to the user as a separate, rule-based
 note (*"connection is not encrypted"*) without affecting the model score.
 
-### 6.2 Free hosting imbalance
+### 7.2 Free hosting imbalance
 Attackers genuinely favour free hosting and site builders (000webhostapp, weebly, github.io,
 vercel.app…), but millions of legitimate sites also live there. Tranco ranks main domains only,
 so almost no legit user sites on these platforms entered the dataset (0.1 % vs 22.4 %). A model
@@ -184,7 +255,7 @@ trained like this would treat *every* site on these platforms as phishing.
 **Decision (D11):** accepted and documented rather than fixed. Fixing it needs a new data source
 (e.g. the Common Crawl index) for limited benefit at this project's scope. Listed as future work.
 
-### 6.3 Why some URL parts are hidden or normalised (the principle)
+### 7.3 Why some URL parts are hidden or normalised (the principle)
 A model learns **every** difference between the two classes, without knowing why it exists.
 Differences are of two kinds:
 - **real** — caused by phishing itself (suspicious words, brand misuse, random tokens): the model
@@ -196,14 +267,14 @@ If artefacts stay, the test score looks excellent (the test set shares the same 
 model fails on real URLs. The rule applied: **the model may only see information that means the
 same thing in the real world as in the dataset.** Being "true in our dataset" is not enough.
 
-### 6.4 What a perfectly unbiased dataset would look like
+### 7.4 What a perfectly unbiased dataset would look like
 Both classes collected the same way from the same population — e.g. all links real users clicked
 over a period, labelled afterwards. This is how large providers (e.g. browser safe-browsing
 services) build their data; it is not publicly available. The achievable standard for a public
 project is therefore: **approximate with the best public sources, audit every class difference,
 neutralise artefacts, and document what remains.**
 
-### 6.5 Is 40,000 URLs enough?
+### 7.5 Is 40,000 URLs enough?
 Comparable to well-known public datasets (ISCX-URL2016 ≈ 36k, UCI 11k; larger ones such as
 PhiUSIIL ≈ 235k exist). LightGBM on 29 features learns well at this size. Phishing is not the
 limit (789k available); legit is (~36k crawled). A **learning curve** in Phase 3 (training on
@@ -211,11 +282,11 @@ limit (789k available); legit is (~36k crawled). A **learning curve** in Phase 3
 
 ---
 
-## 7. Known remaining issues and limitations
+## 8. Known remaining issues and limitations
 
 | Issue | Severity | Handling |
 |---|---|---|
-| Few legit sites on free hosting platforms (0.1 % vs 22.4 %) | Medium | Documented (§6.2); such sites may be over-flagged |
+| Few legit sites on free hosting platforms (0.1 % vs 22.4 %) | Medium | Documented (§7.2); such sites may be over-flagged |
 | Legit URLs have fewer `?query` strings (7.2 % vs 18.5 %) | Mild | Documented; feature importance checked in Phase 3 |
 | Legit links come from homepages only (often navigation pages) | Mild | Documented; slightly cleaner than deep pages users receive |
 | Feed noise (dead or mislabelled phishing URLs) | Small | Documented |
@@ -225,9 +296,9 @@ limit (789k available); legit is (~36k crawled). A **learning curve** in Phase 3
 
 ---
 
-## 8. Upcoming phases
-2. Feature extraction (29 features) and character encoding — **next**
-3. Benchmark, LightGBM, Char-CNN, voting, evaluation
+## 9. Upcoming phases
+2. ~~Feature extraction (29 features) and character encoding~~ — done (Section 5)
+3. Benchmark, LightGBM, Char-CNN, voting, evaluation — **next**
 4. Explanations
 5. FastAPI application and web page
 6. Testing, Docker, deployment
