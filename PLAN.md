@@ -3,7 +3,7 @@
 ## Goal
 A real-time phishing URL detector built as a complete ML project:
 own dataset → 29 engineered features + raw URL text → LightGBM + Char-CNN ensemble →
-explained verdicts → FastAPI app → live deployment on Hugging Face Spaces.
+explained verdicts → FastAPI app → live deployment on Render.
 Simple enough to explain every part in an interview.
 
 ## Final decisions
@@ -26,7 +26,7 @@ Simple enough to explain every part in an interview.
 | Backend | FastAPI + Uvicorn, ONNX Runtime for the CNN (no PyTorch in production) |
 | Frontend | Plain HTML + JavaScript |
 | Testing | pytest |
-| Deployment | Docker → Hugging Face Spaces (free) |
+| Deployment | Docker → Render (free tier) |
 
 ## Features (29, URL text only; http/https scheme ignored to avoid a fake signal)
 | # | Feature | # | Feature |
@@ -65,7 +65,7 @@ PART A — TRAINING (offline, laptop)
                   soft voting (w tuned on validation) → evaluate on test
                   → models/lightgbm.joblib, models/charcnn.onnx, models/config.json
 
-PART B — SERVING (live, Hugging Face Spaces)
+PART B — SERVING (live, Render)
   Web page → POST /api/check → validate URL
      ├─► features.py (SAME code) → LightGBM → p1
      └─► char encoding (SAME code) → CNN (ONNX) → p2
@@ -110,7 +110,7 @@ Scheme (http/https) may be shown to users as a separate rule-based note, outside
 - [x] **3. Models** (3d) — benchmark 4 models, train LightGBM + Char-CNN, tune voting weight, test-set evaluation, ONNX export
 - [x] **4. Reasons** (1d) — top 3 human-readable reasons per verdict
 - [x] **5. App** (1.5d) — FastAPI `/api/check`, `/health`, web page
-- [ ] **6. Ship** (1.5d) — tests, Dockerfile, README with results, new GitHub repo, deploy on Hugging Face Spaces
+- [ ] **6. Ship** (1.5d) — tests, Dockerfile, README with results, new GitHub repo, deploy on Render
 - [ ] **7. Cleanup** — delete old GitHub repo (only after new one is live)
 - [ ] **8. Optional** (+1.5d) — Chrome extension
 
@@ -125,4 +125,4 @@ Domain age (WHOIS), stacking, LLM second check for borderline URLs.
 ## Resume line (fill in real numbers at the end)
 > Built a real-time phishing URL detector using a soft-voting ensemble of LightGBM (29 engineered
 > URL features) and a character-level CNN, trained on N real URLs; achieved X% F1 / Y% recall on a
-> held-out test set; FastAPI + ONNX backend with explained verdicts, Dockerised and deployed on Hugging Face Spaces.
+> held-out test set; FastAPI + ONNX backend with explained verdicts, Dockerised and deployed on Render.

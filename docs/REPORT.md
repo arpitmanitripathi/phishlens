@@ -444,28 +444,32 @@ exactly the ones tested on the laptop.
   no notebooks, no tests.
 - Runs as a **normal user**, not root.
 - A Docker `HEALTHCHECK` calls `/health` every 30 s.
-- Listens on `$PORT` if the host sets one, default 8000 (the port Hugging Face is told to use).
+- Listens on `$PORT` (set by Render), default 8000.
 - Image size went from 2.09 GB in the first build to **933 MB**. Two fixes: `chown -R` copied every
   file into a second layer (the app only needs to read its files, so ownership was not
   changed), and uv's download cache was left inside the image (`UV_NO_CACHE=1`).
 - Tested: the container starts, reports *healthy*, and gives the same verdicts as on the laptop.
 
-### 9.2 Hosting: Hugging Face Spaces
-Options compared (free plans):
+### 9.2 Hosting: Render (free plan) + keep-alive pinger
+Options compared (free plans, checked November 2026):
 
-| | Render | Vercel | **Hugging Face Spaces** |
+| | Render | Vercel | Hugging Face Spaces |
 |---|---|---|---|
-| Runs our Docker image | yes | no | **yes** |
-| Sleeps after | 15 min without visitors (≈ 30–60 s wake-up) | serverless cold starts | **48 h without visitors** |
-| Machine | reported 0.1 CPU, 512 MB (app uses 353 MB) | Python bundle limit 500 MB (our libraries: 487 MB) | **2 vCPU, 16 GB** |
+| Runs our Docker image | **yes** | no | Docker Spaces need a **paid plan**; free Spaces are static files only |
+| Sleeps after | 15 min without visitors (≈ 30–60 s wake-up) | serverless cold starts | — |
+| Machine | reported 0.1 CPU, 512 MB (app uses 353 MB) | Python bundle limit 500 MB (our libraries: 487 MB) | — |
 
-**Decision (D17):** Hugging Face Spaces. A keep-alive pinger on Render was considered and
-rejected: it is an unsupported workaround and does not fix the small machine.
+Hugging Face was chosen first, for its longer sleep time and bigger machine, then dropped when its
+"create Space" page showed that Docker Spaces now require a paid plan. A static Space cannot run
+Python. Running the models in the browser would mean rewriting the feature code in JavaScript,
+breaking the rule that training and the app share the same code (D8).
 
-`scripts/deploy_space.sh <user>/phishlens` copies only what the image needs (code, models,
-Dockerfile, lock file) plus the Space card `deploy/huggingface/README.md`, and uploads it with
-the `hf` CLI. Hugging Face builds the image and runs it on port 8000. GitHub stays the home of
-the code; the Space is the live demo.
+**Decision (D17):** Render free plan, configured in `render.yaml` (Docker runtime, health check
+on `/health`, automatic redeploy on every push to `main`). To avoid the wake-up delay, an external
+scheduler (cron-job.org, free) calls `/health` every 10 minutes, so the service never reaches 15 idle minutes.
+One always-on service fits Render's 750 free hours per month (a month has at most 744). This is a
+workaround, not a Render feature: if the monitor stops, the app simply sleeps again. It does not
+make the small machine faster; with 4 ms per check, it does not need to be.
 
 ---
 
@@ -488,7 +492,7 @@ the code; the Space is the live demo.
 | D14 | Voting weight w = 0.5 (best validation F1) | Ensemble beat both single models on every test metric |
 | D15 | No trusted-site list: the app always shows the model's own result | Trust is per website but phishing is per URL (Google Forms, hacked pages, redirects); hiding or capping results would mislead |
 | D16 | Reasons ordered by per-URL SHAP push; known tricks always first | Shown reasons must have really raised this URL's score; definite tricks must never be hidden |
-| D17 | Host on Hugging Face Spaces (Docker) | Sleeps after 48 h instead of 15 min, bigger free machine, standard for ML demos |
+| D17 | Host on Render free + keep-alive pinger | Free Docker hosting without a card; Hugging Face Docker Spaces need a paid plan; pinger avoids the wake-up delay |
 | D9 | LightGBM + Char-CNN, soft voting; LR/DT/RF only as benchmark | Two genuinely different views of a URL; benchmark justifies the choice |
 
 ---
