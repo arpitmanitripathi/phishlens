@@ -84,7 +84,7 @@ view of the URL and lifts F1 from 89–90 % to 92.7 %.
 ## API
 
 ```bash
-curl -X POST https://<your-app>.onrender.com/api/check \
+curl -X POST https://<space-url>/api/check \
      -H "Content-Type: application/json" \
      -d '{"url": "http://paypal.com@evil-site.top/login"}'
 ```
@@ -118,6 +118,12 @@ docker build -t phishlens .
 docker run -p 8000:8000 phishlens
 ```
 
+Deploy to Hugging Face Spaces (Docker):
+```bash
+uv run --with huggingface_hub hf auth login     # once, with a "write" access token
+scripts/deploy_space.sh <hf-username>/phishlens
+```
+
 Rebuild the data and models from scratch:
 ```bash
 uv run python scripts/build_dataset.py all    # download feeds + crawl legit sites (~15 min)
@@ -141,7 +147,8 @@ src/phishlens/
   predict.py         loads models/ and scores a URL (used by the app)
 app/main.py          FastAPI: /, /health, /api/check
 app/static/          web page (plain HTML + JavaScript)
-scripts/             dataset builder
+scripts/             dataset builder, Hugging Face deploy script
+deploy/huggingface/  Space card (README shown on Hugging Face)
 models/              lightgbm.joblib, charcnn.onnx, config.json
 notebooks/eda.ipynb  data exploration
 docs/REPORT.md       full project report: every decision and its reason

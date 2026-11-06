@@ -444,16 +444,28 @@ exactly the ones tested on the laptop.
   no notebooks, no tests.
 - Runs as a **normal user**, not root.
 - A Docker `HEALTHCHECK` calls `/health` every 30 s.
-- Listens on `$PORT` (set by Render), default 8000.
+- Listens on `$PORT` if the host sets one, default 8000 (the port Hugging Face is told to use).
 - Image size went from 2.09 GB in the first build to **933 MB**. Two fixes: `chown -R` copied every
   file into a second layer (the app only needs to read its files, so ownership was not
   changed), and uv's download cache was left inside the image (`UV_NO_CACHE=1`).
 - Tested: the container starts, reports *healthy*, and gives the same verdicts as on the laptop.
 
-### 9.2 Render
-`render.yaml` describes the service: Docker runtime, free plan, health check on `/health`, and
-automatic redeploy on every push to `main`. On the free plan the app sleeps after about 15 minutes
-without traffic, so the first request after a pause takes longer.
+### 9.2 Hosting: Hugging Face Spaces
+Options compared (free plans):
+
+| | Render | Vercel | **Hugging Face Spaces** |
+|---|---|---|---|
+| Runs our Docker image | yes | no | **yes** |
+| Sleeps after | 15 min without visitors (≈ 30–60 s wake-up) | serverless cold starts | **48 h without visitors** |
+| Machine | reported 0.1 CPU, 512 MB (app uses 353 MB) | Python bundle limit 500 MB (our libraries: 487 MB) | **2 vCPU, 16 GB** |
+
+**Decision (D17):** Hugging Face Spaces. A keep-alive pinger on Render was considered and
+rejected: it is an unsupported workaround and does not fix the small machine.
+
+`scripts/deploy_space.sh <user>/phishlens` copies only what the image needs (code, models,
+Dockerfile, lock file) plus the Space card `deploy/huggingface/README.md`, and uploads it with
+the `hf` CLI. Hugging Face builds the image and runs it on port 8000. GitHub stays the home of
+the code; the Space is the live demo.
 
 ---
 
@@ -476,6 +488,7 @@ without traffic, so the first request after a pause takes longer.
 | D14 | Voting weight w = 0.5 (best validation F1) | Ensemble beat both single models on every test metric |
 | D15 | No trusted-site list: the app always shows the model's own result | Trust is per website but phishing is per URL (Google Forms, hacked pages, redirects); hiding or capping results would mislead |
 | D16 | Reasons ordered by per-URL SHAP push; known tricks always first | Shown reasons must have really raised this URL's score; definite tricks must never be hidden |
+| D17 | Host on Hugging Face Spaces (Docker) | Sleeps after 48 h instead of 15 min, bigger free machine, standard for ML demos |
 | D9 | LightGBM + Char-CNN, soft voting; LR/DT/RF only as benchmark | Two genuinely different views of a URL; benchmark justifies the choice |
 
 ---

@@ -1,7 +1,7 @@
 """PhishLens web app.
 
     GET  /           -> the web page (app/static/index.html)
-    GET  /health     -> {"status": "ok"}  (used by Render / Docker to check the app is alive)
+    GET  /health     -> {"status": "ok"}  (used by Docker / the host to check the app is alive)
     POST /api/check  -> {"url": "..."}  ->  verdict, risk score, reasons
 
 Run locally:  uv run uvicorn app.main:app --reload    then open http://127.0.0.1:8000

@@ -32,5 +32,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
 
-# Render sets $PORT; locally it defaults to 8000.
+# Port 8000 by default (Hugging Face: app_port 8000); a host may override it with $PORT.
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
