@@ -109,7 +109,7 @@ Scheme (http/https) may be shown to users as a separate rule-based note, outside
 - [x] **2. Features** (1.5d) — `features.py` (29) + `char_encoding.py` + tests
 - [x] **3. Models** (3d) — benchmark 4 models, train LightGBM + Char-CNN, tune voting weight, test-set evaluation, ONNX export
 - [x] **4. Reasons** (1d) — top 3 human-readable reasons per verdict
-- [ ] **5. App** (1.5d) — FastAPI `/api/check`, `/health`, web page
+- [x] **5. App** (1.5d) — FastAPI `/api/check`, `/health`, web page
 - [ ] **6. Ship** (1.5d) — tests, Dockerfile, README with results, new GitHub repo, deploy on Render
 - [ ] **7. Cleanup** — delete old GitHub repo (only after new one is live)
 - [ ] **8. Optional** (+1.5d) — Chrome extension

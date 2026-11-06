@@ -125,7 +125,7 @@ than by phishing itself. A model would learn it as a shortcut that fails in the 
 | Ends with `/` | 39.4 % → **0.06 %** | 0.9 % → 0 % | 🚨 Artefact: feeds strip it, sites keep it → removed in normalisation |
 | Non-ASCII characters | 0.6 % → **0 %** | 0 % | ⚠️ Artefact: feeds store encoded URLs → %-encoding / punycode in normalisation |
 | `#fragment` | 0 % | 0.04 % → 0 % | ⚠️ Artefact: crawler dropped it → dropped everywhere; feature `has_fragment` replaced by `is_homepage` |
-| Free hosting / site builders | 0.1 % | 22.4 % | 🚨 Partly artefact: Tranco lists only main domains, never user sites (`someone.weebly.com`) → see §9.2 |
+| Free hosting / site builders | 0.1 % | 22.4 % | 🚨 Partly artefact: Tranco lists only main domains, never user sites (`someone.weebly.com`) → see §10.2 |
 | Has `?query` | 7.2 % | 18.5 % | 🟡 Partly artefact (homepage navigation links rarely have queries) → documented, monitored |
 | `.php` / `.html` path | 10.0 % | 33.0 % | ✅ Real (phishing kits are mostly PHP) |
 | Bare homepage | 12.4 % | 27.6 % | ✅ Real (many phishing sites live at the root) |
@@ -168,7 +168,7 @@ Design choices:
   impersonated brands, URL shorteners). A list built by reading our own phishing URLs would
   memorise the dataset and inflate test scores. For the same reason `.dev`, `.app` and `.io` are
   *not* in the suspicious-TLD list: in our data they lean phishing only because of free hosting
-  (§9.2).
+  (§10.2).
 - **Brands are matched as whole tokens**: "chase" inside "purchase" or "apple" inside
   "pineapple" does not count. A brand on its own site (`paypal.co.uk`) or own TLD
   (`research.google`) does not count either.
@@ -246,7 +246,7 @@ the **features** as the limit, not the algorithm.
 
 **Learning curve** (LightGBM, 25 → 100 % of the training data): F1 89.5 → 90.2 → 90.0 → 90.3 %.
 The curve is flat: **more URLs of the same kind would not help LightGBM much**. This answers the
-question in §9.5 with evidence, and is the reason for adding a second model that reads the URL
+question in §10.5 with evidence, and is the reason for adding a second model that reads the URL
 differently.
 
 ![Learning curve](images/learning_curve.png)
@@ -275,7 +275,7 @@ differently.
   so averaging them cancels part of the errors.
 - The CNN alone is better than LightGBM: it sees patterns the 29 hand-made features do not.
 - These numbers are **lower than the 97–99 % often reported** for URL datasets, by design: the
-  collection shortcuts were removed (§4.1, §9.3) and websites never cross the split, so the score
+  collection shortcuts were removed (§4.1, §10.3) and websites never cross the split, so the score
   is closer to what the model can actually do.
 
 **Risk zones on the test set** (ensemble):
@@ -294,7 +294,7 @@ uncertain cases. The default zone limits (40 / 70) were kept.
 Top features: domain_length (35 % of gain), longest_token_length, domain_entropy,
 suspicious_tld, num_suspicious_words. Long, random-looking domains are the strongest signal.
 **Caution:** part of domain_length may reflect free hosting (`pub-8b4c….r2.dev`), the documented
-imbalance of §9.2. Rarely-firing features (has_at, has_ip, brand_lookalike) have low gain because
+imbalance of §10.2. Rarely-firing features (has_at, has_ip, brand_lookalike) have low gain because
 they are rare, not because they are weak when they do fire.
 
 ### 6.6 Export and checks
@@ -315,14 +315,14 @@ All 8 phishing-style URLs score 70–100, and plain pages of legit sites score l
 | `https://github.com/login` | 58 | Suspicious |
 | `https://login.microsoftonline.com` | 88 | Phishing ❌ |
 | `https://www.onlinesbi.sbi/personal/login.html` | 92 | Phishing ❌ |
-| `https://someone.github.io/portfolio` | 56 | Suspicious (free hosting, §9.2) |
+| `https://someone.github.io/portfolio` | 56 | Suspicious (free hosting, §10.2) |
 
 Why: the crawler collected links from **homepages**, which are rarely login pages, so in our
 training data "login" appears almost only in phishing URLs. A URL-only model also cannot know that
 `microsoftonline.com` belongs to Microsoft. Real products handle this with a list of known,
 trusted sites in front of the model. **Not done here (D15):** a URL on a trusted website can still
 be phishing (user content such as Google Forms, hacked pages, redirect links, abandoned
-subdomains), so the app always shows the model's own result. The weakness stays documented (§10).
+subdomains), so the app always shows the model's own result. The weakness stays documented (§11).
 
 ### 6.8 Engineering note: LightGBM + PyTorch on macOS
 Both libraries ship their own OpenMP (threading) library. In one process they clash: PyTorch's
@@ -382,13 +382,64 @@ mistake visible to the user.
 
 ---
 
-## 8. Design decisions log
+## 8. Web application (Phase 5)
+
+Code: `app/main.py` (FastAPI), `app/static/index.html` (page), tests in `tests/test_app.py`.
+Run locally: `uv run uvicorn app.main:app --reload`, then open `http://127.0.0.1:8000`.
+
+### 8.1 API
+| Endpoint | Purpose |
+|---|---|
+| `GET /` | The web page |
+| `GET /health` | `{"status": "ok"}`, so the hosting platform can check the app is alive |
+| `POST /api/check` | `{"url": "..."}` → cleaned URL, risk score, risk level, reasons, each model's probability |
+| `GET /docs` | Interactive API documentation (generated by FastAPI) |
+
+Example response:
+```json
+{
+  "url": "http://paypal.com@evil-site.top/login",
+  "risk_score": 100,
+  "risk_level": "Phishing",
+  "reasons": [
+    "Contains '@': browsers ignore everything before it, hiding the real site.",
+    "Ends in '.top', a domain ending often abused for phishing.",
+    "Mentions 'paypal', but the website (evil-site.top) does not belong to that brand."
+  ],
+  "model_scores": {"lightgbm": 0.9961, "cnn": 1.0}
+}
+```
+
+Design points:
+- Models are loaded **once at start-up**, not per request. Average response time measured
+  locally: **≈ 4 ms**.
+- Input is validated twice: by the request schema (1–2,048 characters) and by `normalize_url()`.
+  Anything that is not an http(s) web address gets a clear `422` error message.
+- The app runs the CNN with **ONNX Runtime**; PyTorch is not needed in production.
+- The app **never opens the link**: only the text of the address is analysed. This keeps it safe
+  and fast.
+- Following D15, the page shows only the model's result. There is no trusted-site list and no
+  extra note.
+
+### 8.2 Web page
+One HTML file with plain JavaScript, no framework. It shows the verdict as an icon, a label and a
+colour (never colour alone), the risk score on a 0–100 bar with the zone limits, the reasons,
+the checked (cleaned) URL, and optional model details. Light and dark mode follow the system
+setting. User input is always shown as text, never as HTML, so a crafted link cannot inject a
+script. `/?url=...` checks a link directly, which makes results shareable.
+
+![App: phishing result](images/app_phishing.png)
+![App: suspicious result](images/app_suspicious.png)
+
+---
+
+## 9. Design decisions log
 
 | # | Decision | Reason |
 |---|---|---|
 | D1 | URL-text-only features | Fast (ms), safe (no visiting malicious pages), simple |
 | D2 | Crawl legit URLs with paths | Avoid the length/path shortcut seen in PhishX |
-| D3 | Hide scheme (`http/https`) and `www.` from models | Both are collection artefacts in this dataset (§4.1, §9.1) |
+| D3 | Hide scheme (`http/https`) and `www.` from models | Both are collection artefacts in this dataset (§4.1, §10.1) |
 | D4 | Strip default ports in normalisation | `:443` appeared only in legit URLs because of redirects |
 | D5 | Caps per host/website when sampling phishing | Variety; prevent single campaigns dominating |
 | D6 | `domain` column; split train/test by website (Phase 3) | Prevent the model "recognising" a site instead of judging the URL |
@@ -405,9 +456,9 @@ mistake visible to the user.
 
 ---
 
-## 9. Discussion notes
+## 10. Discussion notes
 
-### 9.1 Why the models do not see `http://` / `https://` / `www.`
+### 10.1 Why the models do not see `http://` / `https://` / `www.`
 In the real world, plain `http://` is a *weak* warning sign, but in **our dataset** it is mostly
 an artefact: every legit URL was collected starting from `https://`, so only 0.9 % of legit URLs
 are http versus 23.8 % of phishing. A model shown the scheme would learn
@@ -416,7 +467,7 @@ legitimate http sites and under-weighting real clues for https phishing (76 % of
 URLs already use https). The scheme can still be shown to the user as a separate, rule-based
 note (*"connection is not encrypted"*) without affecting the model score.
 
-### 9.2 Free hosting imbalance
+### 10.2 Free hosting imbalance
 Attackers genuinely favour free hosting and site builders (000webhostapp, weebly, github.io,
 vercel.app…), but millions of legitimate sites also live there. Tranco ranks main domains only,
 so almost no legit user sites on these platforms entered the dataset (0.1 % vs 22.4 %). A model
@@ -424,7 +475,7 @@ trained like this would treat *every* site on these platforms as phishing.
 **Decision (D11):** accepted and documented rather than fixed. Fixing it needs a new data source
 (e.g. the Common Crawl index) for limited benefit at this project's scope. Listed as future work.
 
-### 9.3 Why some URL parts are hidden or normalised (the principle)
+### 10.3 Why some URL parts are hidden or normalised (the principle)
 A model learns **every** difference between the two classes, without knowing why it exists.
 Differences are of two kinds:
 - **real** — caused by phishing itself (suspicious words, brand misuse, random tokens): the model
@@ -436,14 +487,14 @@ If artefacts stay, the test score looks excellent (the test set shares the same 
 model fails on real URLs. The rule applied: **the model may only see information that means the
 same thing in the real world as in the dataset.** Being "true in our dataset" is not enough.
 
-### 9.4 What a perfectly unbiased dataset would look like
+### 10.4 What a perfectly unbiased dataset would look like
 Both classes collected the same way from the same population — e.g. all links real users clicked
 over a period, labelled afterwards. This is how large providers (e.g. browser safe-browsing
 services) build their data; it is not publicly available. The achievable standard for a public
 project is therefore: **approximate with the best public sources, audit every class difference,
 neutralise artefacts, and document what remains.**
 
-### 9.5 Is 40,000 URLs enough?
+### 10.5 Is 40,000 URLs enough?
 Comparable to well-known public datasets (ISCX-URL2016 ≈ 36k, UCI 11k; larger ones such as
 PhiUSIIL ≈ 235k exist). LightGBM on 29 features learns well at this size. Phishing is not the
 limit (789k available); legit is (~36k crawled). A **learning curve** in Phase 3 (training on
@@ -451,11 +502,11 @@ limit (789k available); legit is (~36k crawled). A **learning curve** in Phase 3
 
 ---
 
-## 10. Known remaining issues and limitations
+## 11. Known remaining issues and limitations
 
 | Issue | Severity | Handling |
 |---|---|---|
-| Few legit sites on free hosting platforms (0.1 % vs 22.4 %) | Medium | Documented (§9.2); such sites may be over-flagged |
+| Few legit sites on free hosting platforms (0.1 % vs 22.4 %) | Medium | Documented (§10.2); such sites may be over-flagged |
 | Legit URLs have fewer `?query` strings (7.2 % vs 18.5 %) | Mild | Documented; feature importance checked in Phase 3 |
 | Legit links come from homepages only (often navigation pages) | Mild | Documented; slightly cleaner than deep pages users receive |
 | Feed noise (dead or mislabelled phishing URLs) | Small | Documented |
@@ -466,9 +517,9 @@ limit (789k available); legit is (~36k crawled). A **learning curve** in Phase 3
 
 ---
 
-## 11. Upcoming phases
+## 12. Upcoming phases
 2. ~~Feature extraction (29 features) and character encoding~~ — done (Section 5)
 3. ~~Benchmark, LightGBM, Char-CNN, voting, evaluation~~ — done (Section 6)
 4. ~~Explanations~~ — done (Section 7)
-5. FastAPI application and web page — **next**
-6. Testing, Docker, deployment
+5. ~~FastAPI application and web page~~ — done (Section 8)
+6. Docker, README, deployment — **next**

@@ -14,3 +14,10 @@ verdict, a risk score and the top reasons behind it.
 uv sync                 # create .venv with Python 3.12 and install everything
 uv run pytest           # run tests
 ```
+
+## Run the app locally
+```bash
+uv run uvicorn app.main:app --reload
+# open http://127.0.0.1:8000  (API docs at /docs)
+```
+

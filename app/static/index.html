@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PhishLens — is this link safe?</title>
+<style>
+  :root {
+    --surface: #fcfcfb; --card: #ffffff; --border: #e6e5e1;
+    --text: #0b0b0b; --muted: #52514e; --accent: #2a78d6;
+    --safe: #0ca30c; --warn: #b07a00; --danger: #d03b3b;
+    --safe-bg: #eaf6ea; --warn-bg: #fdf4de; --danger-bg: #fbeaea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --surface: #1a1a19; --card: #232321; --border: #383835;
+      --text: #f0efec; --muted: #c3c2b7; --accent: #3987e5;
+      --safe: #3fbf3f; --warn: #fab219; --danger: #e66767;
+      --safe-bg: #1f2f1f; --warn-bg: #33291a; --danger-bg: #352020;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--surface); color: var(--text);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex; justify-content: center; padding: 48px 16px;
+  }
+  main { width: 100%; max-width: 640px; }
+  h1 { margin: 0; font-size: 28px; }
+  .tagline { margin: 4px 0 28px; color: var(--muted); }
+  form { display: flex; gap: 8px; }
+  input {
+    flex: 1; padding: 12px 14px; font-size: 16px; color: var(--text); background: var(--card);
+    border: 1px solid var(--border); border-radius: 8px;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button {
+    padding: 12px 20px; font-size: 16px; font-weight: 600; color: #fff;
+    background: var(--accent); border: 0; border-radius: 8px; cursor: pointer;
+  }
+  button:disabled { opacity: .6; cursor: wait; }
+  .examples { margin-top: 10px; font-size: 14px; color: var(--muted); }
+  .examples a { color: var(--accent); cursor: pointer; margin-right: 10px; }
+  .card {
+    margin-top: 24px; padding: 20px; background: var(--card);
+    border: 1px solid var(--border); border-radius: 12px;
+  }
+  .verdict { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 8px; }
+  .verdict .icon { font-size: 26px; line-height: 1; }
+  .verdict .level { font-size: 20px; font-weight: 700; }
+  .verdict .score { margin-left: auto; text-align: right; font-size: 14px; color: var(--muted); }
+  .verdict .score b { display: block; font-size: 24px; color: var(--text); }
+  .safe { background: var(--safe-bg); } .safe .level { color: var(--safe); }
+  .warn { background: var(--warn-bg); } .warn .level { color: var(--warn); }
+  .danger { background: var(--danger-bg); } .danger .level { color: var(--danger); }
+  .meter { position: relative; height: 8px; margin: 18px 0 4px; border-radius: 4px;
+    background: linear-gradient(to right, var(--safe) 0 40%, var(--warn) 40% 70%, var(--danger) 70%); }
+  .meter .marker { position: absolute; top: -4px; width: 4px; height: 16px; margin-left: -2px;
+    background: var(--text); border-radius: 2px; border: 1px solid var(--card); }
+  .scale { position: relative; height: 18px; font-size: 12px; color: var(--muted); }
+  .scale span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+  .scale span:first-child { transform: none; }
+  .scale span:last-child { transform: translateX(-100%); }
+  h2 { margin: 20px 0 8px; font-size: 15px; }
+  ul { margin: 0; padding-left: 20px; }
+  li { margin: 4px 0; }
+  .checked { margin-top: 16px; font-size: 13px; color: var(--muted); word-break: break-all; }
+  details { margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .error { color: var(--danger); }
+  footer { margin-top: 40px; font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>🔍 PhishLens</h1>
+  <p class="tagline">Paste a link to check if it looks like phishing. The link is never opened.</p>
+
+  <form id="form">
+    <input id="url" type="text" placeholder="e.g. http://paypa1-secure-login.xyz/verify"
+           autocomplete="off" spellcheck="false" aria-label="Link to check" required>
+    <button id="btn" type="submit">Check</button>
+  </form>
+  <div class="examples">Try:
+    <a data-url="http://paypa1-secure-login.xyz/verify">fake PayPal</a>
+    <a data-url="http://192.168.10.5/wellsfargo/login.php">IP address</a>
+    <a data-url="https://en.wikipedia.org/wiki/Phishing">Wikipedia</a>
+  </div>
+
+  <div id="result" aria-live="polite"></div>
+
+  <footer>
+    Two models judge the address only: LightGBM on 29 URL features and a character-level CNN.
+    92.7 % F1 on unseen websites. A tool to help you decide, not a guarantee.
+  </footer>
+</main>
+
+<script>
+  const LEVELS = {
+    "Looks safe": { css: "safe", icon: "✅" },
+    "Suspicious": { css: "warn", icon: "⚠️" },
+    "Phishing":   { css: "danger", icon: "🚫" },
+  };
+  const form = document.getElementById("form");
+  const input = document.getElementById("url");
+  const btn = document.getElementById("btn");
+  const result = document.getElementById("result");
+
+  // Build elements with textContent (never innerHTML with user data -> no script injection).
+  function el(tag, className, text) {
+    const e = document.createElement(tag);
+    if (className) e.className = className;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function show(data) {
+    const level = LEVELS[data.risk_level];
+    const card = el("div", "card");
+
+    const verdict = el("div", "verdict " + level.css);
+    verdict.append(el("span", "icon", level.icon), el("span", "level", data.risk_level));
+    const score = el("span", "score", "risk score");
+    score.prepend(el("b", "", data.risk_score + " / 100"));
+    verdict.append(score);
+
+    const meter = el("div", "meter");
+    const marker = el("div", "marker");
+    marker.style.left = data.risk_score + "%";
+    meter.append(marker);
+    const scale = el("div", "scale");
+    [[0, "0 safe"], [40, "40 suspicious"], [70, "70 phishing"], [100, "100"]].forEach(([at, text]) => {
+      const label = el("span", "", text);
+      label.style.left = at + "%";
+      scale.append(label);
+    });
+
+    const list = el("ul");
+    data.reasons.forEach(r => list.append(el("li", "", r)));
+
+    const details = el("details");
+    details.append(el("summary", "", "Model details"),
+      el("div", "", `LightGBM: ${(data.model_scores.lightgbm * 100).toFixed(1)} % · ` +
+                    `Char-CNN: ${(data.model_scores.cnn * 100).toFixed(1)} % · ` +
+                    `final = average of both`));
+
+    card.append(verdict, meter, scale, el("h2", "", "Why"), list,
+                el("div", "checked", "Checked: " + data.url), details);
+    result.replaceChildren(card);
+  }
+
+  function showError(message) {
+    const card = el("div", "card");
+    card.append(el("div", "error", message));
+    result.replaceChildren(card);
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    btn.disabled = true;
+    btn.textContent = "Checking…";
+    try {
+      const response = await fetch("/api/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: input.value.trim() }),
+      });
+      const data = await response.json();
+      if (response.ok) show(data);
+      else showError(typeof data.detail === "string" ? data.detail : "Please enter a valid link.");
+    } catch {
+      showError("Could not reach the server. Please try again.");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Check";
+    }
+  });
+
+  document.querySelectorAll(".examples a").forEach(a => a.addEventListener("click", () => {
+    input.value = a.dataset.url;
+    form.requestSubmit();
+  }));
+
+  // Shareable links: /?url=example.com fills the box and checks it right away.
+  const shared = new URLSearchParams(location.search).get("url");
+  if (shared) { input.value = shared; form.requestSubmit(); }
+</script>
+</body>
+</html>
