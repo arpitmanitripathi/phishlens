@@ -320,7 +320,9 @@ All 8 phishing-style URLs score 70–100, and plain pages of legit sites score l
 Why: the crawler collected links from **homepages**, which are rarely login pages, so in our
 training data "login" appears almost only in phishing URLs. A URL-only model also cannot know that
 `microsoftonline.com` belongs to Microsoft. Real products handle this with a list of known,
-trusted sites in front of the model; see §9 for how this is handled.
+trusted sites in front of the model. **Not done here (D15):** a URL on a trusted website can still
+be phishing (user content such as Google Forms, hacked pages, redirect links, abandoned
+subdomains), so the app always shows the model's own result. The weakness stays documented (§9).
 
 ### 6.8 Engineering note: LightGBM + PyTorch on macOS
 Both libraries ship their own OpenMP (threading) library. In one process they clash: PyTorch's
@@ -348,6 +350,7 @@ it never loads PyTorch.
 | D12 | Feature word lists from public sources, not from our data | Lists built from our phishing URLs would memorise the dataset |
 | D13 | Test set used once; all choices on validation | Choices made on the test set would make its score optimistic |
 | D14 | Voting weight w = 0.5 (best validation F1) | Ensemble beat both single models on every test metric |
+| D15 | No trusted-site list: the app always shows the model's own result | Trust is per website but phishing is per URL (Google Forms, hacked pages, redirects); hiding or capping results would mislead |
 | D9 | LightGBM + Char-CNN, soft voting; LR/DT/RF only as benchmark | Two genuinely different views of a URL; benchmark justifies the choice |
 
 ---
@@ -409,7 +412,7 @@ limit (789k available); legit is (~36k crawled). A **learning curve** in Phase 3
 | Phishing on compromised legitimate sites looks like a normal URL | Inherent | Limit of URL-only detection |
 | Same website in train and test would inflate scores | High if ignored | Fixed: split by website (§6.1) |
 | Scores on URL datasets overstate real-world performance | Inherent | Hand-picked tricky URLs tested (§6.7) |
-| Real login pages of big sites can be flagged (§6.7) | Medium | Training legit links come from homepages; known-site list proposed for the app |
+| Real login pages of big sites can be flagged (§6.7) | Medium | Training legit links come from homepages; documented, no trust list (D15). Future: crawl legit login pages |
 
 ---
 
