@@ -3,7 +3,7 @@
 The SAME function is used for training (Phase 3) and for the live app (Phase 5), so the model
 always sees features computed in exactly the same way.
 
-Rule (see docs/REPORT.md, section 8.3): features only look at the part of the URL that means
+Rule (see docs/REPORT.md, section 9.3): features only look at the part of the URL that means
 the same thing in the real world as in our dataset -> model_input() hides "http(s)://" and "www.".
 """
 
@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 
 import pandas as pd
 
-from phishlens.urls import _EXTRACT, hostname, model_input, normalize_url
+from phishlens.urls import hostname, model_input, normalize_url, split_host
 
 # ---------------------------------------------------------------------------------------------
 # Word lists. These come from general knowledge and public reports (e.g. Spamhaus / Interisle
@@ -103,7 +103,7 @@ def _entropy(text: str) -> float:
     return -sum(c / n * math.log2(c / n) for c in Counter(text).values())
 
 
-def _tokens(text: str) -> list[str]:
+def tokens(text: str) -> list[str]:
     """'secure-PayPal.com/log_in' -> ['secure', 'paypal', 'com', 'log', 'in']"""
     return [t for t in TOKEN_SPLIT.split(text.lower()) if t]
 
@@ -137,7 +137,7 @@ def _edit_distance_at_most_1(a: str, b: str) -> bool:
     return edits + (len(b) - j) <= 1
 
 
-def _looks_like_brand(token: str) -> bool:
+def looks_like_brand(token: str) -> bool:
     """'paypa1' / 'rnicrosoft' / 'facebok' -> True; 'paypal' (the real word) -> False."""
     if token in BRANDS:
         return False
@@ -172,7 +172,7 @@ def extract_features(url: str) -> dict[str, float]:
     host = hostname(clean).removeprefix("www.")
     path, query = parts.path, parts.query
     is_ip = _is_ip(host)
-    ext = _EXTRACT(host)
+    ext = split_host(host)
     site_name = ext.domain  # "paypal" in "login.paypal.co.uk"
 
     try:
@@ -180,8 +180,8 @@ def extract_features(url: str) -> dict[str, float]:
     except ValueError:  # port like ":99999" or ":abc" -> still "has a port"
         has_port = True
 
-    visible_tokens = _tokens(visible)
-    host_tokens = _tokens(host)
+    visible_tokens = tokens(visible)
+    host_tokens = tokens(host)
     host_letters = [c for c in host if c.isalpha()]
     lower = visible.lower()
 
@@ -215,7 +215,7 @@ def extract_features(url: str) -> dict[str, float]:
         # --- words and brands ---
         "num_suspicious_words": sum(w in lower for w in SUSPICIOUS_WORDS),
         "brand_in_url_not_domain": int(brand_mentioned and not owns_brand),
-        "brand_lookalike": int(any(_looks_like_brand(t) for t in host_tokens)),
+        "brand_lookalike": int(any(looks_like_brand(t) for t in host_tokens)),
         # --- how random / unusual the text looks ---
         "domain_entropy": _entropy(host),
         "digit_ratio_in_domain": sum(c.isdigit() for c in host) / len(host),

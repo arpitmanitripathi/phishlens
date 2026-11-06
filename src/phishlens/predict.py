@@ -13,6 +13,7 @@ import pandas as pd
 from phishlens.char_encoding import encode
 from phishlens.data import ROOT
 from phishlens.features import FEATURE_NAMES, extract_features
+from phishlens.reasons import explain
 from phishlens.urls import normalize_url
 
 MODELS_DIR = ROOT / "models"
@@ -39,6 +40,9 @@ class Predictor:
         features = extract_features(url)
         X = pd.DataFrame([features], columns=FEATURE_NAMES)
         p_lgbm = float(self.lgbm.predict_proba(X)[0, 1])
+        # Per-URL push of each feature towards phishing (SHAP values, last column = baseline).
+        push = self.lgbm.predict(X, pred_contrib=True)[0][:-1]
+        contributions = dict(zip(FEATURE_NAMES, push.tolist(), strict=True))
         p_cnn = float(self.cnn.run(None, {"ids": encode(url)[None, :]})[0][0])
 
         # Soft voting: weighted average of the two probabilities.
@@ -48,6 +52,7 @@ class Predictor:
             "url": normalize_url(url),
             "risk_score": risk_score,
             "risk_level": self.risk_level(risk_score),
+            "reasons": explain(url, features, contributions, risk_score, p_cnn),
             "lightgbm": round(p_lgbm, 4),
             "cnn": round(p_cnn, 4),
             "features": features,

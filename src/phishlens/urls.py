@@ -102,6 +102,11 @@ def hostname(url: str) -> str:
     return urlsplit(url).hostname or ""
 
 
+def split_host(host: str):
+    """'login.paypal.co.uk' -> subdomain 'login', domain 'paypal', suffix 'co.uk'."""
+    return _EXTRACT(host)
+
+
 def registered_domain(url: str) -> str:
     """The site a URL belongs to: 'https://login.paypal.co.uk/x' -> 'paypal.co.uk'.
 
