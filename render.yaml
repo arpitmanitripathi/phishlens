@@ -1,0 +1,8 @@
+# Render deployment settings (https://render.com/docs/blueprint-spec)
+services:
+  - type: web
+    name: phishlens
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
