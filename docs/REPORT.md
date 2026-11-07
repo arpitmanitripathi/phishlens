@@ -464,6 +464,10 @@ Hugging Face was chosen first, for its longer sleep time and bigger machine, the
 Python. Running the models in the browser would mean rewriting the feature code in JavaScript,
 breaking the rule that training and the app share the same code (D8).
 
+**Live:** https://phishlens-22qo.onrender.com (first deploy: build 1 min 16 s; the live app gives
+the same verdicts as the laptop). Region: Oregon (US West), so a check from India takes about
+0.7 s in total, almost all of it network distance; the model itself takes about 4 ms.
+
 **Decision (D17):** Render free plan, configured in `render.yaml` (Docker runtime, health check
 on `/health`, automatic redeploy on every push to `main`). To avoid the wake-up delay, an external
 scheduler (cron-job.org, free) calls `/health` every 10 minutes, so the service never reaches 15 idle minutes.

@@ -19,6 +19,11 @@ def test_health(client):
     assert client.get("/health").json() == {"status": "ok"}
 
 
+def test_head_requests_allowed(client):
+    assert client.head("/").status_code == 200
+    assert client.head("/health").status_code == 200
+
+
 def test_home_page(client):
     r = client.get("/")
     assert r.status_code == 200 and "PhishLens" in r.text

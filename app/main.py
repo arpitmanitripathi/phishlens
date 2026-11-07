@@ -53,12 +53,13 @@ class CheckResponse(BaseModel):
     model_scores: ModelScores  # each model's own phishing probability (0-1)
 
 
-@app.get("/", include_in_schema=False)
+@app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
 def home():
     return FileResponse(STATIC / "index.html")
 
 
-@app.get("/health")
+# HEAD too: hosts and uptime monitors often check with HEAD (headers only, no body).
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health():
     return {"status": "ok"}
 

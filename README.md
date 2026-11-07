@@ -2,6 +2,8 @@
 
 **Real-time phishing URL detection with an explainable LightGBM + CNN ensemble.**
 
+**Live demo: https://phishlens-22qo.onrender.com** · API docs: [/docs](https://phishlens-22qo.onrender.com/docs)
+
 Paste a link and PhishLens says whether it looks like phishing, gives a risk score from 0 to 100,
 and explains **why** in plain English. The link is never opened: only the text of the address is
 analysed, so checking a dangerous link is safe, and each check takes about 4 ms.
@@ -84,7 +86,7 @@ view of the URL and lifts F1 from 89–90 % to 92.7 %.
 ## API
 
 ```bash
-curl -X POST https://<your-app>.onrender.com/api/check \
+curl -X POST https://phishlens-22qo.onrender.com/api/check \
      -H "Content-Type: application/json" \
      -d '{"url": "http://paypal.com@evil-site.top/login"}'
 ```
