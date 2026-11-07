@@ -167,3 +167,8 @@ Full details, the bias audit and every design decision are in [docs/REPORT.md](d
 
 Python 3.12 · pandas · scikit-learn · LightGBM · PyTorch (training only) · ONNX Runtime ·
 FastAPI · Docker · uv · pytest · ruff
+
+## License
+
+[MIT](LICENSE) © 2026 Arpit Mani Tripathi. The dataset is not included; it is rebuilt from
+OpenPhish, Phishing.Database and Tranco, which have their own terms.
